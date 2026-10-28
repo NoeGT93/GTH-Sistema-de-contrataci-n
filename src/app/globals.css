@@ -5,13 +5,16 @@
   --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
 
   --color-brand-50: #edf8fd;
+  --color-brand-100: #dff2fb;
   --color-brand-400: #58b8df; /* bordes, foco, decoración; nunca texto sobre blanco */
   --color-brand-600: #2e6fa7;
   --color-brand-700: #255b8a;
+  --color-brand-800: #1d4f7c;
   --color-brand-900: #123a60;
   --color-ink: #0d2235;
   --color-muted: #617386;
   --color-line: #dce7ef;
+  --color-surface: #f7fafc; /* fondo de secciones y panel */
   --color-success: #176f52;
   --color-warning: #a5610f;
   --color-danger: #b42318;
@@ -20,10 +23,22 @@
   --radius-card-sm: 18px;
   --radius-card: 22px;
   --radius-feature: 30px;
+
+  --shadow-soft: 0 8px 24px rgba(22, 64, 100, 0.08);
+  --shadow-lift: 0 22px 60px rgba(17, 51, 78, 0.18);
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   @apply bg-white text-ink antialiased;
+}
+
+/* Etiqueta de sección del prototipo ("VIDA FUNDAP", "PROCESO"…). */
+.eyebrow {
+  @apply text-xs font-bold tracking-[0.16em] text-brand-600 uppercase;
 }
 
 /* Foco visible de 3 px en todos los interactivos. */

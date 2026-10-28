@@ -75,5 +75,20 @@ Regla: cada caso de uso es una función de servicio que valida con Zod, llama a 
 
 ## Despliegue (Vercel)
 
-Variables: las de `.env.example`. `vercel.json` programa el cierre automático (00:30 de Guatemala) y la limpieza de CV huérfanos.
-Aplicar migraciones con `npm run db:deploy` antes de cada release.
+El build **no** necesita base de datos. En producción, `vercel-build` aplica las migraciones y la semilla (idempotente) antes de compilar; los previews no tocan la base.
+
+1. **Base de datos:** en el proyecto de Vercel → *Storage* → crea una base Postgres (Neon) y conéctala al proyecto. Vercel agrega `DATABASE_URL` sola.
+2. **Variables** (*Settings → Environment Variables*, entorno Production):
+   - `AUTH_SECRET` — genera uno con `npx auth secret`.
+   - `SEED_ADMIN_EMAIL` y `SEED_ADMIN_NAME` — el primer superadmin (tu correo de Google o Microsoft).
+   - Inicio de sesión: `AUTH_GOOGLE_ID` + `AUTH_GOOGLE_SECRET` (Google Cloud → Credenciales → ID de cliente OAuth, URI de redirección `https://TU-DOMINIO/api/auth/callback/google`) **o** las de Microsoft Entra.
+   - `CRON_SECRET` — cualquier texto largo y aleatorio.
+   - CV: `S3_BUCKET`, `S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (bucket privado con CORS que permita `PUT` desde el dominio).
+   - Correo: `RESEND_API_KEY`, `EMAIL_FROM`, `SITE_URL`.
+3. **Redeploy.** Las migraciones y catálogos se aplican solos; entra en `/login` con el correo de `SEED_ADMIN_EMAIL`.
+
+`vercel.json` programa el cierre automático (00:30 de Guatemala) y la limpieza de CV huérfanos.
+
+## Diseño
+
+La landing sigue el prototipo [`docs/prototipo-portal-v3.html`](docs/prototipo-portal-v3.html) (especificación visual y de contenido, no código base): hero con buscador, Vida FUNDAP, proceso, vacantes reales, Match de Impacto sin porcentajes inventados y FAQ.

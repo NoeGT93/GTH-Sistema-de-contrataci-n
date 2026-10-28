@@ -7,8 +7,8 @@ import { DEFAULT_AGING } from "../src/server/modules/reports/aging";
 const db = new PrismaClient();
 
 const PROGRAMS = ["AFAA", "Alumni", "USA"]; // validar con RR. HH. (completar desde el Excel)
-const AREAS = ["Administración", "Educación", "Microcrédito", "Salud"];
-const BRANCHES = ["Quetzaltenango (Xela)", "Quiché", "San Marcos"]; // completar desde el Excel
+const AREAS = ["Administración", "Agropecuario", "Comunicación", "Educación", "Microcrédito", "Salud"];
+const BRANCHES = ["Quetzaltenango (Xela)", "Quiché", "San Marcos", "Suchitepéquez", "Totonicapán"]; // validar con RR. HH. (completar desde el Excel)
 
 // INE: 22 departamentos. ponytail: los 340 municipios se importan del CSV del INE cuando se necesiten (1B, dirección del candidato).
 const DEPARTMENTS = [

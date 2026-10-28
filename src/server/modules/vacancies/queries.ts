@@ -94,7 +94,13 @@ const publicSelect = {
 
 export type PublicVacancy = Prisma.VacancyGetPayload<{ select: typeof publicSelect }>;
 
-export function listPublicVacancies(f: { area?: string; sede?: string; modalidad?: string; q?: string } = {}) {
+const ORDER = {
+  recientes: { publishedAt: "desc" },
+  cierre: { closesAt: "asc" },
+  az: { title: "asc" },
+} satisfies Record<string, Prisma.VacancyOrderByWithRelationInput>;
+
+export function listPublicVacancies(f: { area?: string; sede?: string; modalidad?: string; q?: string; orden?: string } = {}) {
   const modality = ["ONSITE", "HYBRID", "REMOTE", "FIELD"].includes(f.modalidad ?? "")
     ? (f.modalidad as "ONSITE")
     : undefined;
@@ -107,7 +113,7 @@ export function listPublicVacancies(f: { area?: string; sede?: string; modalidad
       modality,
       title: f.q ? { contains: f.q, mode: "insensitive" } : undefined,
     },
-    orderBy: { publishedAt: "desc" },
+    orderBy: ORDER[f.orden as keyof typeof ORDER] ?? ORDER.recientes,
     select: publicSelect,
   });
 }

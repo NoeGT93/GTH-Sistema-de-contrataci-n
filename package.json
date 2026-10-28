@@ -10,7 +10,8 @@
     "test": "node --import tsx --test src/**/*.test.ts",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "vercel-build": "prisma generate && if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy && prisma db seed; fi && next build"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
