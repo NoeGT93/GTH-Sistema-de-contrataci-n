@@ -28,7 +28,7 @@ Siguiente: **1C** (expediente, visitas, semana de prueba, bajas, agenda, tareas,
 | Hecho | Pendiente en 1A |
 | --- | --- |
 | Esquema completo (45 tablas, 1A–1C) y migración inicial | Exportación XLSX de reportes |
-| Auth.js (Google Workspace o Microsoft 365, el que tenga variables) + `authorize()` con matriz de permisos | Importación del Excel |
+| Auth.js con enlace al correo (más Google/Microsoft opcionales) + `authorize()` con matriz de permisos | Importación del Excel |
 | Auditoría en cada caso de uso | CRUD de catálogos, usuarios y umbrales en el panel |
 | Requerimientos y vacantes: estados, historial, prioridad, visibilidad, semáforo en días hábiles | |
 | Control de plazas con filtros por estado, programa, sucursal y responsable | Municipios del INE (solo departamentos en la semilla) |
@@ -75,19 +75,24 @@ Regla: cada caso de uso es una función de servicio que valida con Zod, llama a 
 
 ## Despliegue (Vercel)
 
-El build **no** necesita base de datos. En producción, `vercel-build` aplica las migraciones y la semilla (idempotente) antes de compilar; los previews no tocan la base.
+El build **no** necesita base de datos. En producción, `vercel-build` aplica migraciones y semilla (idempotente) antes de compilar; los previews no tocan la base.
 
-1. **Base de datos:** en el proyecto de Vercel → *Storage* → crea una base Postgres (Neon) y conéctala al proyecto. Vercel agrega `DATABASE_URL` sola.
-2. **Variables** (*Settings → Environment Variables*, entorno Production):
-   - `AUTH_SECRET` — genera uno con `npx auth secret`.
-   - `SEED_ADMIN_EMAIL` y `SEED_ADMIN_NAME` — el primer superadmin (tu correo de Google o Microsoft).
-   - Inicio de sesión: `AUTH_GOOGLE_ID` + `AUTH_GOOGLE_SECRET` (Google Cloud → Credenciales → ID de cliente OAuth, URI de redirección `https://TU-DOMINIO/api/auth/callback/google`) **o** las de Microsoft Entra.
-   - `CRON_SECRET` — cualquier texto largo y aleatorio.
-   - CV: `S3_BUCKET`, `S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (bucket privado con CORS que permita `PUT` desde el dominio).
-   - Correo: `RESEND_API_KEY`, `EMAIL_FROM`, `SITE_URL`.
-3. **Redeploy.** Las migraciones y catálogos se aplican solos; entra en `/login` con el correo de `SEED_ADMIN_EMAIL`.
+**Ruta fácil (3 pasos):**
 
-`vercel.json` programa el cierre automático (00:30 de Guatemala) y la limpieza de CV huérfanos.
+1. **Base de datos:** proyecto en Vercel → *Storage* → *Create Database* → **Neon** → conéctala (marca Production). Vercel crea `DATABASE_URL`.
+2. **Variables** (*Settings → Environment Variables*, Production):
+   - `SEED_ADMIN_EMAIL` — tu correo; serás el primer superadmin.
+   - `RESEND_API_KEY` — cuenta gratis en [resend.com](https://resend.com) → *API Keys*. Envía los enlaces de acceso y los correos a candidatos.
+3. **Redeploy** y entra en `/login` con tu correo: te llega un enlace (vence en 15 min, un solo uso).
+
+No hace falta `AUTH_SECRET` (se deriva de la conexión a la base) ni `SITE_URL` (se usa el dominio de producción de Vercel).
+Sin `RESEND_API_KEY` el enlace no se envía: aparece en *Vercel → Logs* (busca `login/verificar`), útil solo para el primer acceso.
+Con Resend sin dominio verificado solo se puede enviar a tu propio correo; para el equipo y candidatos verifica el dominio en Resend y define `EMAIL_FROM`.
+
+**Opcional, después:**
+- `CRON_SECRET` — activa el cierre automático de plazas vencidas y la limpieza de CV (`vercel.json`).
+- CV de candidatos: `S3_BUCKET`, `S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (bucket privado con CORS que permita `PUT` desde el dominio).
+- Google Workspace (`AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`) o Microsoft Entra: aparecen como botones extra en `/login`.
 
 ## Diseño
 

@@ -11,7 +11,8 @@ export async function sendEmail(msg: { to: string; subject: string; text: string
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: process.env.EMAIL_FROM, ...msg }),
+      // Sin dominio verificado en Resend solo se puede enviar desde onboarding@resend.dev (y a tu propio correo).
+      body: JSON.stringify({ from: process.env.EMAIL_FROM || "Empleos FUNDAP <onboarding@resend.dev>", ...msg }),
     });
     if (!res.ok) console.error("[email] Resend respondió", res.status, await res.text());
   } catch (e) {
@@ -19,4 +20,10 @@ export async function sendEmail(msg: { to: string; subject: string; text: string
   }
 }
 
-export const siteUrl = () => process.env.SITE_URL ?? "http://localhost:3000";
+/**
+ * URL pública para enlaces en correos. Nunca se toma del encabezado Host (se podría falsificar
+ * para robar enlaces de acceso): SITE_URL o el dominio de producción que define Vercel.
+ */
+export const siteUrl = () =>
+  process.env.SITE_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000");

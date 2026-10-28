@@ -74,3 +74,16 @@ test("línea de tiempo pública sin etapas internas repetidas", () => {
   ).map((e) => e.label);
   assert.deepEqual(labels, ["Aplicación recibida", "En revisión", "Entrevistas", "En revisión"]);
 });
+
+test("enlace de acceso: firma, vencimiento y manipulación", async () => {
+  const { createLinkToken, verifyLinkToken } = await import("../auth/magicLink");
+  const now = Date.parse("2026-10-28T12:00:00Z");
+  const t = createLinkToken("Ana@Fundap.org", "s3cret", now);
+  assert.equal(verifyLinkToken(t, "s3cret", now + 60_000)?.email, "ana@fundap.org");
+  assert.equal(verifyLinkToken(t, "s3cret", now + 16 * 60_000), null); // venció (15 min)
+  assert.equal(verifyLinkToken(t, "otro", now), null); // otra clave
+  const [payload, sig] = t.split(".");
+  const forged = Buffer.from(JSON.stringify({ e: "admin@fundap.org", x: now + 1e9, n: "x" })).toString("base64url");
+  assert.equal(verifyLinkToken(`${forged}.${sig}`, "s3cret", now), null); // correo cambiado
+  assert.equal(verifyLinkToken(payload, "s3cret", now), null); // sin firma
+});
