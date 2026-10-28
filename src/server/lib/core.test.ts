@@ -5,6 +5,8 @@ import { trackingCode, slugify } from "./codes";
 import { computeAging } from "../modules/reports/aging";
 import { can } from "../auth/permissions";
 import { transitionsFrom } from "../modules/vacancies/transitions";
+import { normalizePhone } from "./phone";
+import { isMismatch, publicTimeline } from "../modules/applications/rules";
 
 test("businessDays cuenta como NETWORKDAYS (incluye el día inicial, sin fines de semana ni feriados)", () => {
   const none = new Set<string>();
@@ -44,4 +46,31 @@ test("transiciones válidas por estado", () => {
 test("códigos y slugs", () => {
   assert.match(trackingCode(), /^[2-9A-HJKMNP-Z]{8}$/);
   assert.equal(slugify("Asesor(a) de Microcrédito — Xela"), "asesor-a-de-microcredito-xela");
+});
+
+test("teléfonos a E.164 (+502 por defecto)", () => {
+  assert.equal(normalizePhone("5555 1234"), "+50255551234");
+  assert.equal(normalizePhone("502-5555-1234"), "+50255551234");
+  assert.equal(normalizePhone("+1 (415) 555-0100"), "+14155550100");
+  assert.equal(normalizePhone("1234"), null);
+  assert.equal(normalizePhone("123456789"), null); // 9 dígitos sin + es ambiguo
+});
+
+test("precalificación marca, nunca descarta", () => {
+  assert.equal(isMismatch("YES_NO", "yes", "no"), true);
+  assert.equal(isMismatch("YES_NO", "yes", "yes"), false);
+  assert.equal(isMismatch("SINGLE_CHOICE", ["Diversificado", "Universidad"], "Primaria"), true);
+  assert.equal(isMismatch("SINGLE_CHOICE", ["Diversificado", "Universidad"], "Universidad"), false);
+  assert.equal(isMismatch("NUMBER", { min: 1 }, "0"), true);
+  assert.equal(isMismatch("NUMBER", { min: 1, max: 5 }, "3"), false);
+  assert.equal(isMismatch("NUMBER", { min: 1 }, "abc"), true);
+  assert.equal(isMismatch("TEXT", null, "lo que sea"), false);
+});
+
+test("línea de tiempo pública sin etapas internas repetidas", () => {
+  const at = new Date();
+  const labels = publicTimeline(
+    ["Aplicación recibida", "En revisión", "En revisión", "Entrevistas", "En revisión"].map((label) => ({ label, at })),
+  ).map((e) => e.label);
+  assert.deepEqual(labels, ["Aplicación recibida", "En revisión", "Entrevistas", "En revisión"]);
 });

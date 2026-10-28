@@ -5,9 +5,10 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
     <>
       <header className="sticky top-0 z-10 border-b border-line bg-white/95 backdrop-blur">
         <nav aria-label="Principal" className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
-          <Link href="/" className="text-lg font-bold text-brand-900">Empleos FUNDAP</Link>
-          <div className="flex gap-4 text-sm font-medium">
+          <Link href="/" className="font-bold whitespace-nowrap text-brand-900 sm:text-lg">Empleos FUNDAP</Link>
+          <div className="flex gap-3 text-sm font-medium whitespace-nowrap sm:gap-4">
             <Link href="/empleos" className="hover:text-brand-600">Vacantes</Link>
+            <Link href="/mi-candidatura" className="hover:text-brand-600">Mi candidatura</Link>
           </div>
         </nav>
       </header>

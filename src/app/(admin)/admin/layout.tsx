@@ -9,6 +9,8 @@ export const metadata = { title: "Panel", robots: { index: false } };
 const NAV: { href: string; label: string; permission: Action }[] = [
   { href: "/admin", label: "Dashboard", permission: "report.read" },
   { href: "/admin/plazas", label: "Control de plazas", permission: "vacancy.read" },
+  { href: "/admin/candidatos", label: "Candidatos", permission: "candidate.read" },
+  { href: "/admin/pipeline", label: "Pipeline", permission: "candidate.read" },
   { href: "/admin/aliados", label: "Aliados", permission: "partner.write" },
 ];
 

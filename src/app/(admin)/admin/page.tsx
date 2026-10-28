@@ -63,6 +63,27 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
+      <Card>
+        <h2 className="mb-3 font-semibold">Conversión por etapa · {d.year}</h2>
+        {/* Barras con tabla accesible: el número siempre está en texto. */}
+        <table className="w-full text-sm">
+          <caption className="sr-only">Aplicaciones que alcanzaron cada etapa</caption>
+          <tbody>
+            {d.funnel.map((f) => (
+              <tr key={f.name}>
+                <th scope="row" className="w-48 py-1 pr-3 text-left font-medium">{f.name}</th>
+                <td className="py-1">
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 rounded bg-brand-600" style={{ width: `${d.funnel[0].count ? (f.count / d.funnel[0].count) * 100 : 0}%` }} />
+                    <span className="tabular-nums">{f.count}</span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+
       <Card className="overflow-x-auto">
         <h2 className="mb-3 font-semibold">Requerimientos por mes · {d.year}</h2>
         <table className="w-full text-sm">

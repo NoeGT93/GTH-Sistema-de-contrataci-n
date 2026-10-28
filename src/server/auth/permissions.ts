@@ -5,7 +5,8 @@ export type Actor = { id: string; role: Role; name: string; email: string };
 
 type Scope = "all" | "own";
 
-// Matriz de permisos (sección "Roles y permisos"). "own" = plazas donde el actor es responsable.
+// Matriz de permisos (sección "Roles y permisos"). "own" = plazas donde el actor es responsable
+// o aplicaciones que tiene asignadas. Marketing, Editor y Gerencia nunca ven candidatos.
 // Lo que no aparece está denegado. Fases 1B/1C agregan sus acciones aquí.
 const MATRIX = {
   "vacancy.read": { SUPERADMIN: "all", HR_COORDINATOR: "all", TALENT_ADVISOR: "all", MARKETING: "all" },
@@ -19,6 +20,14 @@ const MATRIX = {
   "vacancy.archive": { SUPERADMIN: "all", HR_COORDINATOR: "all" },
   "promotion.write": { SUPERADMIN: "all", HR_COORDINATOR: "all", TALENT_ADVISOR: "own", MARKETING: "all" },
   "partner.write": { SUPERADMIN: "all", HR_COORDINATOR: "all", TALENT_ADVISOR: "all", MARKETING: "all" },
+  "question.write": { SUPERADMIN: "all", HR_COORDINATOR: "all", TALENT_ADVISOR: "own" },
+  "candidate.read": { SUPERADMIN: "all", HR_COORDINATOR: "all", TALENT_ADVISOR: "own" },
+  "candidate.write": { SUPERADMIN: "all", HR_COORDINATOR: "all", TALENT_ADVISOR: "own" },
+  "application.create": { SUPERADMIN: "all", HR_COORDINATOR: "all", TALENT_ADVISOR: "own" },
+  "application.move": { SUPERADMIN: "all", HR_COORDINATOR: "all", TALENT_ADVISOR: "own" },
+  "application.reopen": { SUPERADMIN: "all", HR_COORDINATOR: "all" },
+  "application.assign": { SUPERADMIN: "all", HR_COORDINATOR: "all" },
+  "cv.download": { SUPERADMIN: "all", HR_COORDINATOR: "all", TALENT_ADVISOR: "own" },
   "report.read": { SUPERADMIN: "all", HR_COORDINATOR: "all", TALENT_ADVISOR: "own", MARKETING: "all", MANAGEMENT: "all" },
   "catalog.write": { SUPERADMIN: "all", HR_COORDINATOR: "all" },
   "user.write": { SUPERADMIN: "all" },
@@ -26,14 +35,23 @@ const MATRIX = {
 
 export type Action = keyof typeof MATRIX;
 
-export function can(actor: Actor, action: Action, resource?: { ownerId?: string | null }): boolean {
+export type Resource = { ownerId?: string | null; assigneeId?: string | null };
+
+export function can(actor: Actor, action: Action, resource?: Resource): boolean {
   const scope = (MATRIX[action] as Partial<Record<Role, Scope>>)[actor.role];
   if (scope === "all") return true;
-  if (scope === "own") return resource === undefined || resource.ownerId === actor.id;
+  if (scope === "own")
+    return resource === undefined || resource.ownerId === actor.id || resource.assigneeId === actor.id;
   return false;
 }
 
+/** Recurso de una aplicación para `authorize`: responsable de la plaza o asignado. */
+export const appResource = (a: { assigneeId: string | null; vacancy: { ownerId: string | null } }): Resource => ({
+  ownerId: a.vacancy.ownerId,
+  assigneeId: a.assigneeId,
+});
+
 /** Única puerta de permisos. Sin `resource`, "own" significa "puede sobre alguna". */
-export function authorize(actor: Actor, action: Action, resource?: { ownerId?: string | null }): void {
+export function authorize(actor: Actor, action: Action, resource?: Resource): void {
   if (!can(actor, action, resource)) throw new AppError("FORBIDDEN", "No tienes permiso para esta acción.");
 }

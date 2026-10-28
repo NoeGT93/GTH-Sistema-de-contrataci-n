@@ -34,6 +34,8 @@ export const transitionSchema = z.object({
   id: z.string().min(1),
   action: z.enum(["approve", "publish", "pause", "close", "reactivate", "archive"]),
   reason: optionalText,
+  // Al cerrar: a dónde van las aplicaciones activas (vacío = se quedan donde están).
+  moveApplicationsTo: z.enum(["vacancy_closed", "talent_pool"]).optional().or(z.literal("").transform(() => undefined)),
 });
 
 export const vacancyFiltersSchema = z.object({

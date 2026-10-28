@@ -14,7 +14,7 @@ export async function getDashboard(actor: Actor) {
   const scope: Prisma.VacancyWhereInput = actor.role === "TALENT_ADVISOR" ? { ownerId: actor.id } : {};
   const year = Number(todayGT().slice(0, 4));
 
-  const [open, byStatus, thisYear, ctx] = await Promise.all([
+  const [open, byStatus, thisYear, ctx, stages, reached] = await Promise.all([
     db.vacancy.findMany({
       where: { ...scope, status: { in: [...OPEN] } },
       select: {
@@ -31,7 +31,22 @@ export async function getDashboard(actor: Actor) {
       select: { requestedAt: true, program: { select: { name: true } } },
     }),
     loadAgingContext(),
+    db.pipelineStage.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } }),
+    // Conversión: aplicaciones del año que alcanzaron cada etapa (solo cifras, sin datos personales).
+    db.applicationStageEvent.findMany({
+      where: { application: { vacancy: scope, createdAt: { gte: new Date(`${year}-01-01T00:00:00Z`) } } },
+      distinct: ["applicationId", "toStageId"],
+      select: { applicationId: true, toStage: { select: { sortOrder: true, category: true } } },
+    }),
   ]);
+  // Una aplicación "alcanzó" cada etapa hasta la más avanzada que tocó (saltarse etapas no la resta).
+  const furthest = new Map<string, number>();
+  for (const r of reached)
+    if (r.toStage.category === "ACTIVE" || r.toStage.category === "HIRED")
+      furthest.set(r.applicationId, Math.max(furthest.get(r.applicationId) ?? 0, r.toStage.sortOrder));
+  const funnel = stages
+    .filter((st) => st.category === "ACTIVE" || st.category === "HIRED")
+    .map((st) => ({ name: st.name, count: [...furthest.values()].filter((o) => o >= st.sortOrder).length }));
 
   const aging: Record<AgingStatus, number> = { ON_TIME: 0, DUE_SOON: 0, OVERDUE: 0 };
   const withAging = open.map((v) => {
@@ -68,6 +83,7 @@ export async function getDashboard(actor: Actor) {
       .slice(0, 10),
     withoutPromotion,
     months,
+    funnel,
     byProgram: [...byProgram.entries()].map(([program, counts]) => ({ program, counts })),
   };
 }

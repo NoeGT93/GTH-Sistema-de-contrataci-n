@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getPublicVacancy, similarPublicVacancies } from "@/server/modules/vacancies/queries";
+import Link from "next/link";
 import { JobCard, MODALITY_LABEL } from "@/components/public/JobCard";
+import { buttonClass } from "@/components/ui";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -48,6 +50,9 @@ export default async function JobPage({ params }: Props) {
       <h1 className="mt-1 text-3xl font-bold">{v.title}</h1>
       <p className="mt-2 text-muted">{sedes} · {MODALITY_LABEL[v.modality]}</p>
       {v.salaryText && <p className="mt-1 font-semibold">{v.salaryText}</p>}
+      {v.status === "ACTIVE" && (
+        <Link href={`/empleos/${v.slug}/aplicar`} className={`${buttonClass()} mt-6 hidden md:inline-flex`}>Aplicar ahora</Link>
+      )}
       {v.summary && <p className="mt-6 text-lg">{v.summary}</p>}
       {v.description && <p className="mt-4 whitespace-pre-line">{v.description}</p>}
       {[["Requisitos", v.requirements], ["Beneficios", v.benefits]].map(([title, body]) =>
@@ -66,6 +71,13 @@ export default async function JobPage({ params }: Props) {
       <p className="mt-8 rounded-[var(--radius-card-sm)] bg-brand-50 p-4 text-sm">
         <strong>Aviso:</strong> FUNDAP nunca cobra por aplicar ni pide depósitos durante el proceso.
       </p>
+
+      {/* Botón Aplicar fijo en móvil. */}
+      {v.status === "ACTIVE" && (
+        <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-white p-3 md:hidden">
+          <Link href={`/empleos/${v.slug}/aplicar`} className={`${buttonClass()} w-full`}>Aplicar ahora</Link>
+        </div>
+      )}
 
       {similar.length > 0 && (
         <section className="mt-12">

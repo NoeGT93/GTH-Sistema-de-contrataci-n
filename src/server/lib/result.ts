@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
 
 export type ErrorCode = "VALIDATION" | "FORBIDDEN" | "NOT_FOUND" | "INVALID_TRANSITION" | "CONFLICT";
@@ -23,6 +24,9 @@ export async function run<T>(fn: () => Promise<T>): Promise<Result<T>> {
       for (const issue of e.issues) (fields[issue.path.join(".")] ??= []).push(issue.message);
       return { ok: false, error: { code: "VALIDATION", message: "Revisa los campos marcados.", fields } };
     }
+    // Restricción única (p. ej. dos envíos simultáneos de la misma aplicación).
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")
+      return { ok: false, error: { code: "CONFLICT", message: "Este registro ya existe." } };
     throw e;
   }
 }

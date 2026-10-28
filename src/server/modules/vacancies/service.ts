@@ -6,6 +6,7 @@ import { slugify, trackingCode } from "@/server/lib/codes";
 import { todayGT } from "@/server/lib/businessDays";
 import { transitionSchema, updateVacancySchema, vacancyFieldsSchema, type VacancyFields } from "./schemas";
 import { TRANSITIONS, type TransitionKey } from "./transitions";
+import { moveActiveApplicationsInTx } from "@/server/modules/applications/service";
 
 const asDate = (s?: string) => (s ? new Date(s + "T00:00:00Z") : null);
 
@@ -70,7 +71,7 @@ export async function updateVacancy(actor: Actor, input: unknown) {
 }
 
 export async function transitionVacancy(actor: Actor | null, input: unknown) {
-  const { id, action, reason } = transitionSchema.parse(input);
+  const { id, action, reason, moveApplicationsTo } = transitionSchema.parse(input);
   const t = TRANSITIONS[action as TransitionKey];
   const v = await db.vacancy.findUnique({ where: { id }, include: { branches: true } });
   if (!v) throw new AppError("NOT_FOUND", "La plaza no existe.");
@@ -105,6 +106,8 @@ export async function transitionVacancy(actor: Actor | null, input: unknown) {
       data: { vacancyId: id, fromStatus: v.status, toStatus: t.to, reason, actorId: actor?.id },
     });
     await audit(tx, actor, `vacancy.${action}`, "vacancy", id, reason ? { reason } : undefined);
+    if (action === "close" && moveApplicationsTo)
+      await moveActiveApplicationsInTx(tx, actor, id, moveApplicationsTo, reason ?? "Vacante cerrada");
   });
 }
 

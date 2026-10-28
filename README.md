@@ -5,21 +5,37 @@ El diseño completo está en [`docs/arquitectura.md`](docs/arquitectura.md); `pr
 
 ## Estado
 
-**Fase 1A · Control de plazas** (en curso)
+**Fase 1B · Portal + candidatos** (hecha)
+
+- Aplicar en 3 pasos (Contacto · Precalificación · CV y consentimiento), mobile first, con botón fijo en móvil
+- CV directo al bucket con URL prefirmada (PDF/DOC/DOCX, 5 MB, tamaño verificado al enviar); limpieza diaria de huérfanos
+- Deduplicación por teléfono E.164; no se aplica dos veces a la misma plaza (el segundo intento actualiza el contacto)
+- Precalificación que marca `needsReview`, nunca descarta; editor de preguntas en la ficha de la plaza
+- Atribución primer/último toque (UTM, referrer, página de entrada, fbclid/gclid) desde cookies del middleware
+- Código de seguimiento + "Mi candidatura" con etiquetas públicas y límite de 5 intentos fallidos por IP (15 min)
+- Candidatos (lista, ficha, notas, historial unificado), aplicación manual (feria, referido, aliado), asignación
+- Pipeline Kanban por plaza: arrastrar o selector por tarjeta; motivo obligatorio en etapas cerradas
+- Contratado crea la contratación y su checklist; reabrir una aplicación cerrada solo Coordinación RR. HH.
+- Entrevistas (RR. HH., gerencia, final) con resultado; descarga de CV auditada
+- Cerrar una plaza mueve sus aplicaciones activas a "Vacante cerrada" o "Base de talento"
+- Correos de confirmación y de cambio de etapa pública (Resend)
+- Dashboard: conversión por etapa (solo cifras)
+
+Siguiente: **1C** (expediente, visitas, semana de prueba, bajas, agenda, tareas, metas, CMS, base de talento, Match).
+
+**Fase 1A · Control de plazas**
 
 | Hecho | Pendiente en 1A |
 | --- | --- |
 | Esquema completo (45 tablas, 1A–1C) y migración inicial | Exportación XLSX de reportes |
 | Auth.js (Google Workspace o Microsoft 365, el que tenga variables) + `authorize()` con matriz de permisos | Importación del Excel |
 | Auditoría en cada caso de uso | CRUD de catálogos, usuarios y umbrales en el panel |
-| Requerimientos y vacantes: estados, historial, prioridad, visibilidad, semáforo en días hábiles | Preguntas de precalificación (UI) |
+| Requerimientos y vacantes: estados, historial, prioridad, visibilidad, semáforo en días hábiles | |
 | Control de plazas con filtros por estado, programa, sucursal y responsable | Municipios del INE (solo departamentos en la semilla) |
 | Promoción por canal/aliado con costo y evidencia; directorio de aliados | |
 | Dashboard: abiertas, por vencer, vencidas, sin promoción, requerimientos por mes | |
 | Cron diario que cierra plazas vencidas | |
 | Portal: inicio, `/empleos` con filtros y `/empleos/[slug]` con JSON-LD y aviso de cierre/pausa | |
-
-Siguiente: **1B** (aplicar en 3 pasos con CV, candidatos, pipeline Kanban, Mi candidatura).
 
 ## Desarrollo local
 
@@ -35,7 +51,7 @@ Con `AUTH_DEV_LOGIN=true` (solo fuera de producción) se entra escribiendo el co
 En producción solo entran usuarios dados de alta y activos en `users`, vía Google o Microsoft.
 
 ```bash
-npm test     # días hábiles, semáforo, permisos, transiciones
+npm test     # días hábiles, semáforo, permisos, transiciones, teléfonos, precalificación
 npm run lint # tsc --noEmit
 ```
 
@@ -43,11 +59,13 @@ npm run lint # tsc --noEmit
 
 ```
 src/
-  app/(public)/            portal: /, /empleos, /empleos/[slug]
-  app/(admin)/admin/       panel: dashboard, plazas, aliados (+ actions.ts)
-  app/api/                 auth, cron
+  app/(public)/            portal: /, /empleos, /empleos/[slug], /aplicar, /mi-candidatura
+  app/(admin)/admin/       panel: dashboard, plazas, candidatos, pipeline, aliados (+ actions.ts)
+  app/api/                 auth, cron, subida de CV, descarga auditada
+  middleware.ts            atribución (primer y último toque)
+  server/integrations/     storage (S3 / disco en dev) · email (Resend)
   server/auth/             Auth.js, getActor(), authorize() y matriz de permisos
-  server/modules/          vacancies · promotion · reports · audit
+  server/modules/          vacancies · applications · candidates · promotion · reports · audit
   server/lib/              días hábiles, códigos, Result
   components/              ui (design system) · admin · public
 prisma/                    schema.prisma · migrations/ · seed.ts
@@ -57,5 +75,5 @@ Regla: cada caso de uso es una función de servicio que valida con Zod, llama a 
 
 ## Despliegue (Vercel)
 
-Variables: las de `.env.example`. `vercel.json` programa el cierre automático a las 00:30 de Guatemala.
+Variables: las de `.env.example`. `vercel.json` programa el cierre automático (00:30 de Guatemala) y la limpieza de CV huérfanos.
 Aplicar migraciones con `npm run db:deploy` antes de cada release.

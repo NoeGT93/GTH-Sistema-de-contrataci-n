@@ -6,9 +6,11 @@ import { getVacancy } from "@/server/modules/vacancies/queries";
 import { STATUS_LABEL, TRANSITIONS, transitionsFrom } from "@/server/modules/vacancies/transitions";
 import { todayGT } from "@/server/lib/businessDays";
 import { AgingBadge } from "@/components/admin/AgingBadge";
-import { PromotionForm, TransitionForm } from "@/components/admin/forms";
+import { PromotionForm, QuestionForm, TransitionForm } from "@/components/admin/forms";
 import { Badge, buttonClass, Card, EmptyState } from "@/components/ui";
-import { addPromotionAction, removePromotionAction, transitionAction } from "../../actions";
+import {
+  addPromotionAction, addQuestionAction, removePromotionAction, removeQuestionAction, transitionAction,
+} from "../../actions";
 
 const fmt = (d: Date, time = false) =>
   d.toLocaleString("es-GT", {
@@ -22,6 +24,15 @@ export default async function VacancyPage({ params }: { params: Promise<{ id: st
   const v = await getVacancy(actor, (await params).id);
   const actions = transitionsFrom(v.status).filter((k) => can(actor, TRANSITIONS[k].permission, v));
   const canPromote = can(actor, "promotion.write", v);
+  const canQuestions = can(actor, "question.write", v);
+  const canSeeCandidates = can(actor, "candidate.read", v);
+  const [questions, appsByCategory] = await Promise.all([
+    db.screeningQuestion.findMany({ where: { vacancyId: v.id }, orderBy: { sortOrder: "asc" }, include: { _count: { select: { answers: true } } } }),
+    canSeeCandidates
+      ? db.application.findMany({ where: { vacancyId: v.id }, select: { stage: { select: { category: true } } } })
+      : [],
+  ]);
+  const activeApps = appsByCategory.filter((a) => a.stage.category === "ACTIVE").length;
   const [channels, partners] = canPromote
     ? await Promise.all([
         db.promotionChannel.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
@@ -46,11 +57,18 @@ export default async function VacancyPage({ params }: { params: Promise<{ id: st
         )}
       </div>
 
+      {/* Al cubrir todas las posiciones se propone cerrar; nunca se cierra sola. */}
+      {v.status === "ACTIVE" && v._count.hires >= v.positions && (
+        <p role="status" className="rounded-[var(--radius-card-sm)] bg-success/10 p-4 text-sm font-medium text-success">
+          Todas las posiciones están cubiertas. ¿Cerrar la plaza con motivo &quot;Cubierta&quot;?
+        </p>
+      )}
+
       {actions.length > 0 && (
         <Card className="flex flex-wrap gap-4">
           {actions.map((k) => (
             <TransitionForm key={k} action={transitionAction} id={v.id} transition={k}
-              label={TRANSITIONS[k].label} needsReason={TRANSITIONS[k].reason} />
+              label={TRANSITIONS[k].label} needsReason={TRANSITIONS[k].reason} activeApplications={activeApps} />
           ))}
         </Card>
       )}
@@ -78,6 +96,45 @@ export default async function VacancyPage({ params }: { params: Promise<{ id: st
           </p>
         )}
         {v.observations && <p className="mt-4 text-sm text-muted">{v.observations}</p>}
+      </Card>
+
+      {canSeeCandidates && (
+        <Card className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm"><strong>{appsByCategory.length}</strong> aplicaciones · <strong>{activeApps}</strong> activas</p>
+          <div className="flex gap-4 text-sm">
+            <Link href={`/admin/pipeline?vacante=${v.id}`} className="font-semibold text-brand-600 underline">Ver pipeline</Link>
+            <Link href={`/admin/candidatos?vacancyId=${v.id}`} className="text-brand-600 underline">Candidatos</Link>
+          </div>
+        </Card>
+      )}
+
+      <Card id="precalificacion">
+        <h2 className="mb-1 font-semibold">Precalificación</h2>
+        <p className="mb-3 text-sm text-muted">Una respuesta distinta a la esperada solo marca la aplicación para revisión; nunca descarta.</p>
+        {questions.length === 0 ? (
+          <EmptyState title="Sin preguntas" />
+        ) : (
+          <ol className="mb-4 divide-y divide-line text-sm">
+            {questions.map((q) => (
+              <li key={q.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span>
+                  {q.prompt}{q.required ? " *" : ""}
+                  <span className="text-muted"> · {{ YES_NO: "Sí/No", SINGLE_CHOICE: "Opción única", NUMBER: "Número", TEXT: "Texto" }[q.type]}
+                    {q.expectedAnswer != null && ` · esperada: ${JSON.stringify(q.expectedAnswer)}`}
+                    {q._count.answers > 0 && ` · ${q._count.answers} respuestas`}
+                  </span>
+                </span>
+                {canQuestions && q._count.answers === 0 && (
+                  <form action={removeQuestionAction}>
+                    <input type="hidden" name="id" value={q.id} />
+                    <button className="text-xs text-danger hover:underline">Eliminar</button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+        {canQuestions && <div className="border-t border-line pt-4"><QuestionForm action={addQuestionAction} vacancyId={v.id} /></div>}
       </Card>
 
       <Card id="promocion">

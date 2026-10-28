@@ -80,6 +80,19 @@ async function main() {
   for (const [i, name] of ONBOARDING_ITEMS.entries())
     await db.onboardingItem.upsert({ where: { name }, update: {}, create: { name, sortOrder: i + 1 } });
 
+  // Texto provisional: el definitivo (y el caso de menores en Alumni) es decisión pendiente de GTH.
+  await db.consentVersion.upsert({
+    where: { purpose_version: { purpose: "application", version: 1 } },
+    update: {},
+    create: {
+      purpose: "application",
+      version: 1,
+      text:
+        "Autorizo a FUNDAP a usar mis datos y mi CV únicamente para este y otros procesos de selección, " +
+        "y a contactarme por teléfono, WhatsApp o correo. Puedo pedir que los eliminen en cualquier momento.",
+    },
+  });
+
   await db.setting.upsert({ where: { key: "aging" }, update: {}, create: { key: "aging", value: DEFAULT_AGING } });
 
   const email = process.env.SEED_ADMIN_EMAIL?.toLowerCase();

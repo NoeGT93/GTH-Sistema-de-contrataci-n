@@ -166,8 +166,8 @@ export function VacancyForm({
 }
 
 export function TransitionForm({
-  action, id, transition, label, needsReason,
-}: { action: Action; id: string; transition: string; label: string; needsReason: boolean }) {
+  action, id, transition, label, needsReason, activeApplications = 0,
+}: { action: Action; id: string; transition: string; label: string; needsReason: boolean; activeApplications?: number }) {
   const { state, pending, form } = useForm(action);
   return (
     <form {...form} className="flex flex-wrap items-end gap-2">
@@ -176,6 +176,14 @@ export function TransitionForm({
       {needsReason && (
         <input name="reason" required placeholder="Motivo" aria-label={`Motivo para ${label.toLowerCase()}`}
           className="rounded-[var(--radius-control)] border border-line px-3 py-2 text-sm" />
+      )}
+      {transition === "close" && activeApplications > 0 && (
+        <select name="moveApplicationsTo" defaultValue="vacancy_closed" aria-label="Qué hacer con las aplicaciones activas"
+          className="rounded-[var(--radius-control)] border border-line px-3 py-2 text-sm">
+          <option value="vacancy_closed">{activeApplications} aplicaciones activas → Vacante cerrada</option>
+          <option value="talent_pool">{activeApplications} aplicaciones activas → Base de talento</option>
+          <option value="">Dejar las aplicaciones donde están</option>
+        </select>
       )}
       <Button variant={transition === "close" ? "danger" : "secondary"} disabled={pending}>{label}</Button>
       <FormError state={state} />
@@ -238,6 +246,166 @@ export function PartnerForm({ action }: { action: Action }) {
         <Button disabled={pending}>Agregar aliado</Button>
         <FormError state={state} />
       </div>
+    </form>
+  );
+}
+
+// ───────────── Candidatos y pipeline (1B) ─────────────
+
+type Stage = { key: string; name: string; category: string; requiresReason: boolean };
+
+export function MoveStageForm({ action, id, current, stages }: { action: Action; id: string; current: string; stages: Stage[] }) {
+  const { state, pending, form } = useForm(action);
+  return (
+    <form {...form} className="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="id" value={id} />
+      <label className="sr-only" htmlFor={`stage-${id}`}>Mover a etapa</label>
+      <select id={`stage-${id}`} name="stageKey" defaultValue={current} className="rounded-[var(--radius-control)] border border-line px-3 py-2 text-sm">
+        {stages.map((s) => <option key={s.key} value={s.key}>{s.name}{s.requiresReason ? " (motivo)" : ""}</option>)}
+      </select>
+      <input name="reason" placeholder="Motivo (si aplica)" aria-label="Motivo"
+        className="rounded-[var(--radius-control)] border border-line px-3 py-2 text-sm" />
+      <Button variant="secondary" disabled={pending}>Mover</Button>
+      <FormError state={state} />
+    </form>
+  );
+}
+
+export function AssignForm({ action, id, current, users }: { action: Action; id: string; current: string; users: Opt[] }) {
+  const { state, pending, form } = useForm(action);
+  return (
+    <form {...form} className="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="id" value={id} />
+      <label className="sr-only" htmlFor={`assignee-${id}`}>Asignar a</label>
+      <select id={`assignee-${id}`} name="assigneeId" defaultValue={current} className="rounded-[var(--radius-control)] border border-line px-3 py-2 text-sm">
+        <option value="">Sin asignar</option>
+        {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+      </select>
+      <Button variant="secondary" disabled={pending}>Asignar</Button>
+      <FormError state={state} />
+    </form>
+  );
+}
+
+export function InterviewForm({ action, applicationId }: { action: Action; applicationId: string }) {
+  const { state, pending, form } = useForm(action);
+  const e = fieldErrors(state);
+  return (
+    <form {...form} className="grid gap-3 sm:grid-cols-[160px_1fr_1fr_auto] sm:items-end">
+      <input type="hidden" name="applicationId" value={applicationId} />
+      <Field label="Entrevista" name={`kind-${applicationId}`} error={e.kind}>
+        {(a) => (
+          <select {...a} name="kind" defaultValue="HR">
+            <option value="HR">RR. HH.</option><option value="MANAGEMENT">Gerencia</option><option value="FINAL">Final</option>
+          </select>
+        )}
+      </Field>
+      <Field label="Fecha y hora" name={`at-${applicationId}`} error={e.scheduledAt}>
+        {(a) => <input {...a} name="scheduledAt" type="datetime-local" required />}
+      </Field>
+      <Field label="Lugar o enlace" name={`loc-${applicationId}`} error={e.location}>{(a) => <input {...a} name="location" />}</Field>
+      <Button variant="secondary" disabled={pending}>Agendar</Button>
+      <div className="sm:col-span-4"><FormError state={state} /></div>
+    </form>
+  );
+}
+
+export function InterviewResultForm({ action, id }: { action: Action; id: string }) {
+  const { state, pending, form } = useForm(action);
+  return (
+    <form {...form} className="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="id" value={id} />
+      <select name="result" aria-label="Resultado" defaultValue="FAVORABLE" className="rounded-[var(--radius-control)] border border-line px-2 py-1.5 text-sm">
+        <option value="FAVORABLE">Favorable</option><option value="NOT_FAVORABLE">No favorable</option><option value="NO_SHOW">No se presentó</option>
+      </select>
+      <input name="resultNotes" placeholder="Comentario" aria-label="Comentario" className="rounded-[var(--radius-control)] border border-line px-2 py-1.5 text-sm" />
+      <Button variant="ghost" disabled={pending}>Registrar</Button>
+      <FormError state={state} />
+    </form>
+  );
+}
+
+export function NoteForm({ action, candidateId, applications }: { action: Action; candidateId: string; applications: Opt[] }) {
+  const { state, pending, form } = useForm(action);
+  const e = fieldErrors(state);
+  return (
+    <form {...form} className="space-y-2">
+      <input type="hidden" name="candidateId" value={candidateId} />
+      <Field label="Nueva nota" name="body" error={e.body}>{(a) => <textarea {...a} rows={3} required />}</Field>
+      <div className="flex flex-wrap items-center gap-2">
+        <select name="applicationId" aria-label="Sobre qué aplicación" className="rounded-[var(--radius-control)] border border-line px-3 py-2 text-sm">
+          <option value="">General</option>
+          {applications.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+        <Button variant="secondary" disabled={pending}>Guardar nota</Button>
+        <FormError state={state} />
+      </div>
+    </form>
+  );
+}
+
+export function ManualApplicationForm({ action, vacancies }: { action: Action; vacancies: Opt[] }) {
+  const { state, pending, form } = useForm(action);
+  const e = fieldErrors(state);
+  return (
+    <form {...form} className="grid gap-3 md:grid-cols-3">
+      <Field label="Plaza" name="vacancyId" error={e.vacancyId}>
+        {(a) => (
+          <select {...a} required defaultValue="">
+            <option value="" disabled>Elige…</option>
+            {vacancies.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+        )}
+      </Field>
+      <Field label="Nombre" name="firstName" error={e.firstName}>{(a) => <input {...a} required />}</Field>
+      <Field label="Apellido" name="lastName" error={e.lastName}>{(a) => <input {...a} required />}</Field>
+      <Field label="Teléfono" name="phone" error={e.phone}>{(a) => <input {...a} type="tel" required />}</Field>
+      <Field label="Correo" name="email" error={e.email}>{(a) => <input {...a} type="email" />}</Field>
+      <Field label="Origen" name="source" error={e.source}>
+        {(a) => (
+          <select {...a} defaultValue="feria">
+            <option value="feria">Feria</option><option value="referido">Referido</option>
+            <option value="aliado">Aliado</option><option value="otro">Otro</option>
+          </select>
+        )}
+      </Field>
+      <Field label="Detalle del origen" name="sourceDetail" error={e.sourceDetail}>{(a) => <input {...a} placeholder="Feria USAC, referido por…" />}</Field>
+      <div className="flex items-center gap-4 md:col-span-3">
+        <Button disabled={pending}>Registrar aplicación</Button>
+        <FormError state={state} />
+      </div>
+    </form>
+  );
+}
+
+export function QuestionForm({ action, vacancyId }: { action: Action; vacancyId: string }) {
+  const { state, pending, form } = useForm(action);
+  const e = fieldErrors(state);
+  return (
+    <form {...form} className="grid gap-3 md:grid-cols-2">
+      <input type="hidden" name="vacancyId" value={vacancyId} />
+      <div className="md:col-span-2">
+        <Field label="Pregunta" name="prompt" error={e.prompt}>{(a) => <input {...a} required placeholder="¿Tienes moto y licencia vigente?" />}</Field>
+      </div>
+      <Field label="Tipo" name="type" error={e.type}>
+        {(a) => (
+          <select {...a} defaultValue="YES_NO">
+            <option value="YES_NO">Sí / No</option><option value="SINGLE_CHOICE">Opción única</option>
+            <option value="NUMBER">Número</option><option value="TEXT">Texto libre</option>
+          </select>
+        )}
+      </Field>
+      <Field label="Respuesta esperada" name="expected" error={e.expected} hint='Sí/No: "sí" o "no" · Opción: aceptadas, una por línea · Número: "min-max" (p. ej. "1-")'>
+        {(a) => <textarea {...a} rows={2} />}
+      </Field>
+      <Field label="Opciones (solo opción única)" name="options" error={e.options} hint="Una por línea">
+        {(a) => <textarea {...a} rows={3} />}
+      </Field>
+      <div className="flex items-center gap-4 self-end">
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="required" defaultChecked /> Obligatoria</label>
+        <Button variant="secondary" disabled={pending}>Agregar pregunta</Button>
+      </div>
+      <div className="md:col-span-2"><FormError state={state} /></div>
     </form>
   );
 }
