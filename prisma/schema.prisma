@@ -1,0 +1,860 @@
+// FUNDAP Talento — fuente de verdad del modelo de datos.
+// 45 tablas en 8 dominios (Fases 1A–1C). Ver docs/arquitectura.md.
+// Tablas en snake_case (@@map); columnas en camelCase.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+
+enum Role {
+  SUPERADMIN
+  HR_COORDINATOR
+  TALENT_ADVISOR
+  MARKETING
+  EDITOR
+  MANAGEMENT
+}
+
+enum VacancyStatus {
+  PENDING_APPROVAL
+  DRAFT
+  ACTIVE
+  PAUSED
+  CLOSED
+  ARCHIVED
+}
+
+enum Visibility {
+  PUBLIC
+  INTERNAL
+  UNPUBLISHED
+}
+
+enum Priority {
+  A
+  B
+  C
+}
+
+enum Modality {
+  ONSITE
+  HYBRID
+  REMOTE
+  FIELD
+}
+
+enum StageCategory {
+  ACTIVE
+  HIRED
+  CLOSED_NEGATIVE
+  TALENT_POOL
+}
+
+enum QuestionType {
+  YES_NO
+  SINGLE_CHOICE
+  TEXT
+  NUMBER
+}
+
+enum TouchType {
+  FIRST
+  LAST
+}
+
+enum InterviewKind {
+  HR
+  MANAGEMENT
+  FINAL
+}
+
+enum InterviewResult {
+  PENDING
+  FAVORABLE
+  NOT_FAVORABLE
+  NO_SHOW
+}
+
+enum HireStatus {
+  ACTIVE
+  SEPARATED
+}
+
+enum SeparationType {
+  RESIGNATION
+  DISMISSAL
+  CONTRACT_END
+  FAILED_PROBATION
+  OTHER
+}
+
+enum ProbationResult {
+  PENDING
+  APPROVED
+  NOT_APPROVED
+}
+
+enum VisitStatus {
+  PENDING
+  DONE
+  NOT_APPLICABLE
+  CANCELLED
+}
+
+enum VisitMode {
+  IN_PERSON
+  VIRTUAL
+}
+
+enum CheckResult {
+  PENDING
+  FAVORABLE
+  NOT_FAVORABLE
+  UNREACHABLE
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+enum Recurrence {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum FileVisibility {
+  PRIVATE
+  PUBLIC
+}
+
+enum FileKind {
+  CV
+  HIRE_DOCUMENT
+  PROMOTION_EVIDENCE
+  VACANCY_IMAGE
+  CMS_IMAGE
+  OTHER
+}
+
+// ─────────────────── Usuarios y auditoría (1A) ───────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  role          Role
+  active        Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deactivatedAt DateTime?
+
+  ownedVacancies       Vacancy[]               @relation("VacancyOwner")
+  requestedVacancies   Vacancy[]               @relation("VacancyRequester")
+  vacancyStatusEvents  VacancyStatusEvent[]
+  promotions           VacancyPromotion[]
+  assignedApplications Application[]           @relation("ApplicationAssignee")
+  stageEvents          ApplicationStageEvent[]
+  interviewSlots       InterviewParticipant[]
+  notes                Note[]
+  homeVisits           HomeVisitVisitor[]
+  backgroundChecks     BackgroundCheck[]
+  tasks                Task[]                  @relation("TaskAssignee")
+  createdTasks         Task[]                  @relation("TaskCreator")
+  teamEvents           TeamEventAttendee[]
+  goals                Goal[]
+  auditLogs            AuditLog[]
+  uploadedFiles        File[]
+  contentVersions      ContentVersion[]
+
+  @@map("users")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String // p. ej. "vacancy.publish", "hire.read", "file.download"
+  entityType String
+  entityId   String
+  data       Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
+}
+
+model Setting {
+  key       String   @id // p. ej. "aging.dueSoonDays", "aging.priorityDays"
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+// ──────────────────────── Catálogos (1A) ─────────────────────────
+
+/// Quien solicita la plaza (AFAA, USA, Alumni…).
+model Program {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  active    Boolean   @default(true)
+  vacancies Vacancy[]
+  goals     Goal[]
+
+  @@map("programs")
+}
+
+/// Categoría que ve el candidato en el portal (Microcrédito, Educación…).
+model Area {
+  id        String              @id @default(cuid())
+  name      String              @unique
+  slug      String              @unique
+  active    Boolean             @default(true)
+  vacancies Vacancy[]
+  interests CandidateInterest[]
+
+  @@map("areas")
+}
+
+model Branch {
+  id             String           @id @default(cuid())
+  name           String           @unique
+  municipalityId String?
+  municipality   GeoMunicipality? @relation(fields: [municipalityId], references: [id])
+  address        String?
+  active         Boolean          @default(true)
+  vacancies      VacancyBranch[]
+
+  @@map("branches")
+}
+
+model GeoDepartment {
+  id             String            @id // código INE, p. ej. "09"
+  name           String            @unique
+  municipalities GeoMunicipality[]
+
+  @@map("geo_departments")
+}
+
+model GeoMunicipality {
+  id           String        @id // código INE, p. ej. "0901"
+  name         String
+  departmentId String
+  department   GeoDepartment @relation(fields: [departmentId], references: [id])
+  branches     Branch[]
+  candidates   Candidate[]
+
+  @@unique([departmentId, name])
+  @@map("geo_municipalities")
+}
+
+model Holiday {
+  date DateTime @id @db.Date
+  name String
+
+  @@map("holidays")
+}
+
+model PipelineStage {
+  id             String                  @id @default(cuid())
+  key            String                  @unique // "new", "screening", "hired"…
+  name           String
+  publicLabel    String
+  category       StageCategory
+  sortOrder      Int
+  requiresReason Boolean                 @default(false)
+  active         Boolean                 @default(true)
+  applications   Application[]
+  eventsFrom     ApplicationStageEvent[] @relation("FromStage")
+  eventsTo       ApplicationStageEvent[] @relation("ToStage")
+
+  @@map("pipeline_stages")
+}
+
+model PromotionChannel {
+  id         String             @id @default(cuid())
+  key        String             @unique // "facebook", "computrabajo", "ferias"…
+  name       String
+  active     Boolean            @default(true)
+  promotions VacancyPromotion[]
+
+  @@map("promotion_channels")
+}
+
+/// Escala de clasificación de visitas domiciliarias.
+model VisitRating {
+  id        String      @id @default(cuid())
+  name      String      @unique
+  sortOrder Int
+  visits    HomeVisit[]
+
+  @@map("visit_ratings")
+}
+
+/// Ítems del checklist de expediente (contrato, seguro, sistema…).
+model OnboardingItem {
+  id        String              @id @default(cuid())
+  name      String              @unique
+  sortOrder Int
+  active    Boolean             @default(true)
+  hireItems HireChecklistItem[]
+
+  @@map("onboarding_items")
+}
+
+// ───────────────────────── Plazas (1A) ───────────────────────────
+
+model Vacancy {
+  id            String        @id @default(cuid())
+  title         String
+  slug          String?       @unique
+  status        VacancyStatus @default(PENDING_APPROVAL)
+  visibility    Visibility    @default(UNPUBLISHED)
+  priority      Priority      @default(B)
+  modality      Modality      @default(ONSITE)
+  programId     String
+  program       Program       @relation(fields: [programId], references: [id])
+  areaId        String?
+  area          Area?         @relation(fields: [areaId], references: [id])
+  ownerId       String?
+  owner         User?         @relation("VacancyOwner", fields: [ownerId], references: [id])
+  requestedById String?
+  requestedBy   User?         @relation("VacancyRequester", fields: [requestedById], references: [id])
+  positions     Int           @default(1)
+  requestedAt   DateTime      @db.Date
+  approvedAt    DateTime?
+  publishedAt   DateTime?
+  closesAt      DateTime?     @db.Date
+  closedAt      DateTime?
+  closeReason   String?
+  archivedAt    DateTime?
+  summary       String?
+  description   String?
+  requirements  String?
+  benefits      String?
+  salaryText    String?
+  cvRequired    Boolean       @default(true)
+  observations  String?
+  imageFileId   String?       @unique
+  imageFile     File?         @relation("VacancyImage", fields: [imageFileId], references: [id])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  branches     VacancyBranch[]
+  statusEvents VacancyStatusEvent[]
+  questions    ScreeningQuestion[]
+  promotions   VacancyPromotion[]
+  applications Application[]
+  hires        Hire[]
+
+  @@index([status, visibility])
+  @@index([ownerId])
+  @@map("vacancies")
+}
+
+/// Una vacante puede repartir posiciones entre varias sedes.
+model VacancyBranch {
+  vacancyId String
+  vacancy   Vacancy @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  branchId  String
+  branch    Branch  @relation(fields: [branchId], references: [id])
+  positions Int     @default(1)
+
+  @@id([vacancyId, branchId])
+  @@map("vacancy_branches")
+}
+
+model VacancyStatusEvent {
+  id         String         @id @default(cuid())
+  vacancyId  String
+  vacancy    Vacancy        @relation(fields: [vacancyId], references: [id])
+  fromStatus VacancyStatus?
+  toStatus   VacancyStatus
+  reason     String?
+  actorId    String? // null = sistema (cron)
+  actor      User?          @relation(fields: [actorId], references: [id])
+  createdAt  DateTime       @default(now())
+
+  @@index([vacancyId, createdAt])
+  @@map("vacancy_status_events")
+}
+
+model ScreeningQuestion {
+  id             String              @id @default(cuid())
+  vacancyId      String
+  vacancy        Vacancy             @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  prompt         String
+  type           QuestionType
+  options        Json? // opciones para SINGLE_CHOICE
+  expectedAnswer Json? // si no coincide → mismatch + needsReview, nunca descarte
+  required       Boolean             @default(true)
+  sortOrder      Int
+  answers        ApplicationAnswer[]
+
+  @@map("screening_questions")
+}
+
+// ──────────────────────── Promoción (1A) ─────────────────────────
+
+/// Cada canal usado para una plaza es un registro, no una casilla.
+model VacancyPromotion {
+  id             String           @id @default(cuid())
+  vacancyId      String
+  vacancy        Vacancy          @relation(fields: [vacancyId], references: [id])
+  channelId      String
+  channel        PromotionChannel @relation(fields: [channelId], references: [id])
+  partnerId      String?
+  partner        Partner?         @relation(fields: [partnerId], references: [id])
+  promotedAt     DateTime         @db.Date
+  responsibleId  String?
+  responsible    User?            @relation(fields: [responsibleId], references: [id])
+  costGtq        Decimal?         @db.Decimal(10, 2)
+  url            String?
+  evidenceFileId String?
+  evidenceFile   File?            @relation("PromotionEvidence", fields: [evidenceFileId], references: [id])
+  notes          String?
+  removedAt      DateTime?
+  createdAt      DateTime         @default(now())
+
+  @@index([vacancyId])
+  @@map("vacancy_promotions")
+}
+
+model Partner {
+  id         String             @id @default(cuid())
+  name       String             @unique
+  kind       String? // universidad, municipalidad, ONG…
+  notes      String?
+  active     Boolean            @default(true)
+  contacts   PartnerContact[]
+  promotions VacancyPromotion[]
+  createdAt  DateTime           @default(now())
+
+  @@map("partners")
+}
+
+model PartnerContact {
+  id        String  @id @default(cuid())
+  partnerId String
+  partner   Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  name      String
+  position  String?
+  phone     String?
+  email     String?
+
+  @@map("partner_contacts")
+}
+
+// ──────────────────────── Candidatos (1B) ────────────────────────
+
+model Candidate {
+  id             String           @id @default(cuid())
+  firstName      String
+  lastName       String
+  phone          String           @unique // E.164 (+502…), obligatorio
+  email          String?          @unique
+  municipalityId String?
+  municipality   GeoMunicipality? @relation(fields: [municipalityId], references: [id])
+  inTalentPool   Boolean          @default(false)
+  anonymizedAt   DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  interests    CandidateInterest[]
+  consents     Consent[]
+  tags         CandidateTag[]
+  notes        Note[]
+  applications Application[]
+
+  @@map("candidates")
+}
+
+model CandidateInterest {
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  areaId      String
+  area        Area      @relation(fields: [areaId], references: [id])
+
+  @@id([candidateId, areaId])
+  @@map("candidate_interests")
+}
+
+model ConsentVersion {
+  id          String    @id @default(cuid())
+  purpose     String // "application", "talent_pool"
+  version     Int
+  text        String
+  publishedAt DateTime  @default(now())
+  consents    Consent[]
+
+  @@unique([purpose, version])
+  @@map("consent_versions")
+}
+
+model Consent {
+  id               String         @id @default(cuid())
+  candidateId      String
+  candidate        Candidate      @relation(fields: [candidateId], references: [id])
+  consentVersionId String
+  consentVersion   ConsentVersion @relation(fields: [consentVersionId], references: [id])
+  grantedAt        DateTime       @default(now())
+  revokedAt        DateTime?
+  ip               String?
+
+  @@map("consents")
+}
+
+model Tag {
+  id         String         @id @default(cuid())
+  name       String         @unique
+  candidates CandidateTag[]
+
+  @@map("tags")
+}
+
+model CandidateTag {
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  tagId       String
+  tag         Tag       @relation(fields: [tagId], references: [id])
+
+  @@id([candidateId, tagId])
+  @@map("candidate_tags")
+}
+
+model Note {
+  id            String       @id @default(cuid())
+  candidateId   String
+  candidate     Candidate    @relation(fields: [candidateId], references: [id])
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id])
+  authorId      String
+  author        User         @relation(fields: [authorId], references: [id])
+  body          String
+  createdAt     DateTime     @default(now())
+
+  @@index([candidateId])
+  @@map("notes")
+}
+
+// ─────────────────────── Aplicaciones (1B) ───────────────────────
+
+model Application {
+  id           String        @id @default(cuid())
+  candidateId  String
+  candidate    Candidate     @relation(fields: [candidateId], references: [id])
+  vacancyId    String
+  vacancy      Vacancy       @relation(fields: [vacancyId], references: [id])
+  stageId      String
+  stage        PipelineStage @relation(fields: [stageId], references: [id])
+  assigneeId   String?
+  assignee     User?         @relation("ApplicationAssignee", fields: [assigneeId], references: [id])
+  trackingCode String        @unique // 8 caracteres sin ambiguos
+  cvFileId     String?       @unique
+  cvFile       File?         @relation("ApplicationCv", fields: [cvFileId], references: [id])
+  motivation   String?
+  source       String? // canal declarado o "manual:feria", "manual:referido"…
+  needsReview  Boolean       @default(false)
+  closedReason String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  answers          ApplicationAnswer[]
+  stageEvents      ApplicationStageEvent[]
+  touches          AttributionTouch[]
+  interviews       Interview[]
+  notes            Note[]
+  hire             Hire?
+  backgroundChecks BackgroundCheck[]
+
+  @@unique([candidateId, vacancyId])
+  @@index([vacancyId, stageId])
+  @@map("applications")
+}
+
+model ApplicationAnswer {
+  id            String            @id @default(cuid())
+  applicationId String
+  application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  questionId    String
+  question      ScreeningQuestion @relation(fields: [questionId], references: [id])
+  value         Json
+  mismatch      Boolean           @default(false)
+
+  @@unique([applicationId, questionId])
+  @@map("application_answers")
+}
+
+model ApplicationStageEvent {
+  id            String         @id @default(cuid())
+  applicationId String
+  application   Application    @relation(fields: [applicationId], references: [id])
+  fromStageId   String?
+  fromStage     PipelineStage? @relation("FromStage", fields: [fromStageId], references: [id])
+  toStageId     String
+  toStage       PipelineStage  @relation("ToStage", fields: [toStageId], references: [id])
+  reason        String?
+  actorId       String?
+  actor         User?          @relation(fields: [actorId], references: [id])
+  createdAt     DateTime       @default(now())
+
+  @@index([applicationId, createdAt])
+  @@index([toStageId, createdAt])
+  @@map("application_stage_events")
+}
+
+/// Primer y último toque por aplicación. En Fase 2 se enlaza a campaigns por utmCampaign.
+model AttributionTouch {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  type          TouchType
+  utmSource     String?
+  utmMedium     String?
+  utmCampaign   String?
+  utmContent    String?
+  utmTerm       String?
+  referrer      String?
+  landingPath   String?
+  externalIds   Json? // fbclid, gclid…
+  occurredAt    DateTime
+
+  @@unique([applicationId, type])
+  @@index([utmCampaign])
+  @@map("attribution_touches")
+}
+
+model Interview {
+  id            String                 @id @default(cuid())
+  applicationId String
+  application   Application            @relation(fields: [applicationId], references: [id])
+  kind          InterviewKind
+  scheduledAt   DateTime
+  location      String?
+  result        InterviewResult        @default(PENDING)
+  resultNotes   String?
+  participants  InterviewParticipant[]
+  createdAt     DateTime               @default(now())
+
+  @@index([scheduledAt])
+  @@map("interviews")
+}
+
+model InterviewParticipant {
+  interviewId String
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@id([interviewId, userId])
+  @@map("interview_participants")
+}
+
+// ───────────────── Ingreso — zona restringida (1C) ─────────────────
+
+model Hire {
+  id              String          @id @default(cuid())
+  applicationId   String          @unique
+  application     Application     @relation(fields: [applicationId], references: [id])
+  vacancyId       String
+  vacancy         Vacancy         @relation(fields: [vacancyId], references: [id])
+  status          HireStatus      @default(ACTIVE)
+  hiredAt         DateTime        @db.Date // entrada a Contratado
+  startDate       DateTime?       @db.Date
+  probationResult ProbationResult @default(PENDING)
+  probationNotes  String?
+  separatedAt     DateTime?       @db.Date
+  separationType  SeparationType?
+  separationNotes String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  checklist HireChecklistItem[]
+  visits    HomeVisit[]
+
+  @@index([vacancyId])
+  @@map("hires")
+}
+
+model HireChecklistItem {
+  id     String         @id @default(cuid())
+  hireId String
+  hire   Hire           @relation(fields: [hireId], references: [id], onDelete: Cascade)
+  itemId String
+  item   OnboardingItem @relation(fields: [itemId], references: [id])
+  doneAt DateTime?      @db.Date
+  fileId String?
+  file   File?          @relation(fields: [fileId], references: [id])
+  notes  String?
+
+  @@unique([hireId, itemId])
+  @@map("hire_checklist_items")
+}
+
+model HomeVisit {
+  id          String             @id @default(cuid())
+  hireId      String
+  hire        Hire               @relation(fields: [hireId], references: [id])
+  status      VisitStatus        @default(PENDING)
+  scheduledAt DateTime?
+  visitedAt   DateTime?          @db.Date
+  mode        VisitMode?
+  ratingId    String?
+  rating      VisitRating?       @relation(fields: [ratingId], references: [id])
+  result      String?
+  visitors    HomeVisitVisitor[]
+  createdAt   DateTime           @default(now())
+
+  @@map("home_visits")
+}
+
+model HomeVisitVisitor {
+  visitId String
+  visit   HomeVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User      @relation(fields: [userId], references: [id])
+
+  @@id([visitId, userId])
+  @@map("home_visit_visitors")
+}
+
+model BackgroundCheck {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+  referenceName String
+  relationship  String?
+  phone         String?
+  result        CheckResult @default(PENDING)
+  notes         String?
+  checkedById   String?
+  checkedBy     User?       @relation(fields: [checkedById], references: [id])
+  checkedAt     DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@map("background_checks")
+}
+
+// ───────────────── Operación y contenido (1A–1C) ─────────────────
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  status      TaskStatus @default(OPEN)
+  dueAt       DateTime?
+  recurrence  Recurrence @default(NONE)
+  assigneeId  String
+  assignee    User       @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdById String
+  createdBy   User       @relation("TaskCreator", fields: [createdById], references: [id])
+  entityType  String? // vínculo opcional: "vacancy", "application", "hire"
+  entityId    String?
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+
+  @@index([assigneeId, status])
+  @@map("tasks")
+}
+
+model TeamEvent {
+  id        String              @id @default(cuid())
+  title     String
+  kind      String // "feria", "reunión", "capacitación"…
+  startsAt  DateTime
+  endsAt    DateTime?
+  location  String?
+  notes     String?
+  attendees TeamEventAttendee[]
+  createdAt DateTime            @default(now())
+
+  @@index([startsAt])
+  @@map("team_events")
+}
+
+model TeamEventAttendee {
+  eventId String
+  event   TeamEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User      @relation(fields: [userId], references: [id])
+
+  @@id([eventId, userId])
+  @@map("team_event_attendees")
+}
+
+/// Meta semanal (entrevistas con gerencia o finales; 6 por defecto).
+model Goal {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  programId String?
+  program   Program? @relation(fields: [programId], references: [id])
+  metric    String // "weekly_interviews"
+  weekStart DateTime @db.Date
+  target    Int
+
+  @@unique([userId, metric, weekStart])
+  @@map("goals")
+}
+
+/// Archivos privados por defecto; solo imágenes de vacante y CMS pueden ser públicas.
+model File {
+  id           String         @id @default(cuid())
+  storageKey   String         @unique
+  kind         FileKind
+  visibility   FileVisibility @default(PRIVATE)
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  uploadedById String?
+  uploadedBy   User?          @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime       @default(now())
+  deletedAt    DateTime?
+
+  vacancyImage      Vacancy?            @relation("VacancyImage")
+  applicationCv     Application?        @relation("ApplicationCv")
+  promotionEvidence VacancyPromotion[]  @relation("PromotionEvidence")
+  checklistItems    HireChecklistItem[]
+
+  @@map("files")
+}
+
+/// Bloque CMS tipado: borrador y publicado validados con Zod según la clave.
+model ContentBlock {
+  key         String           @id // "home.hero", "faq"…
+  draft       Json?
+  published   Json?
+  publishedAt DateTime?
+  updatedAt   DateTime         @updatedAt
+  versions    ContentVersion[]
+
+  @@map("content_blocks")
+}
+
+model ContentVersion {
+  id            String       @id @default(cuid())
+  blockKey      String
+  block         ContentBlock @relation(fields: [blockKey], references: [key])
+  version       Int
+  data          Json
+  publishedById String?
+  publishedBy   User?        @relation(fields: [publishedById], references: [id])
+  createdAt     DateTime     @default(now())
+
+  @@unique([blockKey, version])
+  @@map("content_versions")
+}

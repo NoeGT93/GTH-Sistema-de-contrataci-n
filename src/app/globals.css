@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* Design system FUNDAP (sección "Design system"). Colores con contraste AA corregido. */
+@theme {
+  --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-50: #edf8fd;
+  --color-brand-400: #58b8df; /* bordes, foco, decoración; nunca texto sobre blanco */
+  --color-brand-600: #2e6fa7;
+  --color-brand-700: #255b8a;
+  --color-brand-900: #123a60;
+  --color-ink: #0d2235;
+  --color-muted: #617386;
+  --color-line: #dce7ef;
+  --color-success: #176f52;
+  --color-warning: #a5610f;
+  --color-danger: #b42318;
+
+  --radius-control: 13px;
+  --radius-card-sm: 18px;
+  --radius-card: 22px;
+  --radius-feature: 30px;
+}
+
+body {
+  @apply bg-white text-ink antialiased;
+}
+
+/* Foco visible de 3 px en todos los interactivos. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--color-brand-400);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
